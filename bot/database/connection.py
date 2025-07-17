@@ -17,7 +17,7 @@ class Base(DeclarativeBase):
 
 # Create async engine
 engine = create_async_engine(
-    settings.database_url,
+    settings.effective_database_url,
     echo=settings.database_echo,
     pool_pre_ping=True,
     pool_recycle=300,

@@ -20,7 +20,7 @@ from bot.config.settings import settings
 config = context.config
 
 # Set the database URL from our settings (convert async URL to sync for Alembic)
-sync_database_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+sync_database_url = settings.effective_database_url.replace("postgresql+asyncpg://", "postgresql://")
 config.set_main_option("sqlalchemy.url", sync_database_url)
 
 # Interpret the config file for Python logging.

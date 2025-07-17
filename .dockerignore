@@ -60,6 +60,3 @@ test_*
 
 # Documentation
 docs/
-
-# Alembic versions (migrations will be run in container)
-alembic/versions/*.py 

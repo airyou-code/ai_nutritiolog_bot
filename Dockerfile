@@ -1,5 +1,7 @@
-# Multi-stage build for Python bot with uv
-FROM python:3.12-slim AS base
+FROM --platform=linux/amd64 python:3.12-slim
+
+ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE 1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -17,29 +19,15 @@ WORKDIR /app
 # Copy uv configuration files
 COPY pyproject.toml uv.lock ./
 
-# Create virtual environment and install dependencies
+# Create virtual environment and install production dependencies
 RUN uv sync --frozen --no-dev
-
-# Development stage
-FROM base AS development
-RUN uv sync --frozen
-COPY . .
-CMD ["uv", "run", "python", "-m", "bot.main"]
-
-# Production stage
-FROM base AS production
 
 # Copy application code
 COPY . .
 
-# Create non-root user for security
-RUN groupadd -r botuser && useradd -r -g botuser botuser
-RUN chown -R botuser:botuser /app
-USER botuser
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import asyncio; print('Bot is healthy')" || exit 1
+    CMD python -c "import sys; sys.exit(0)" || exit 1
 
-# Run the bot
+# Run the bot asynchronously in production
 CMD ["uv", "run", "python", "-m", "bot.main"] 
