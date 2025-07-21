@@ -1,7 +1,7 @@
 import logging
 import json
 import asyncio
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from datetime import timedelta
 
 import redis.asyncio as redis
@@ -239,6 +239,143 @@ class RedisService:
             
         except Exception as e:
             logger.error(f"Error getting daily requests: {e}")
+            return 0
+    
+    async def get_redis_client(self) -> Optional[redis.Redis]:
+        """Get Redis client for external use (e.g., LangGraph checkpointer)"""
+        if not self.redis_client:
+            # Try to connect if not connected
+            await self.connect()
+        
+        return self.redis_client
+    
+    async def save_chat_session(
+        self,
+        user_id: int,
+        thread_id: str,
+        session_data: Dict,
+        expire_hours: int = 168  # 7 days default
+    ) -> bool:
+        """Save chat session with automatic expiration"""
+        if not self.redis_client:
+            return False
+        
+        try:
+            key = f"chat_session:{user_id}:{thread_id}"
+            expire_seconds = expire_hours * 3600
+            
+            await self.redis_client.setex(
+                key,
+                expire_seconds,
+                json.dumps(session_data)
+            )
+            
+            # Also update recent sessions list
+            await self._update_recent_sessions_list(user_id, thread_id)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving chat session: {e}")
+            return False
+    
+    async def get_chat_session(self, user_id: int, thread_id: str) -> Optional[Dict]:
+        """Get chat session data"""
+        if not self.redis_client:
+            return None
+        
+        try:
+            key = f"chat_session:{user_id}:{thread_id}"
+            data = await self.redis_client.get(key)
+            
+            if data:
+                return json.loads(data)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting chat session: {e}")
+            return None
+    
+    async def get_recent_chat_topics(self, user_id: int, limit: int = 10) -> List[str]:
+        """Get recent chat topics for context"""
+        if not self.redis_client:
+            return []
+        
+        try:
+            key = f"recent_topics:{user_id}"
+            topics = await self.redis_client.lrange(key, 0, limit - 1)
+            return topics or []
+            
+        except Exception as e:
+            logger.error(f"Error getting recent topics: {e}")
+            return []
+    
+    async def add_chat_topic(self, user_id: int, topic: str, max_topics: int = 20) -> bool:
+        """Add a new chat topic, maintaining a limited list"""
+        if not self.redis_client:
+            return False
+        
+        try:
+            key = f"recent_topics:{user_id}"
+            
+            # Add topic to the beginning of the list
+            await self.redis_client.lpush(key, topic)
+            
+            # Trim to max_topics
+            await self.redis_client.ltrim(key, 0, max_topics - 1)
+            
+            # Set expiration
+            await self.redis_client.expire(key, 86400 * 30)  # 30 days
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding chat topic: {e}")
+            return False
+    
+    async def _update_recent_sessions_list(self, user_id: int, thread_id: str):
+        """Update list of recent chat sessions for user"""
+        try:
+            key = f"user_sessions:{user_id}"
+            
+            # Add session to the beginning
+            await self.redis_client.lpush(key, thread_id)
+            
+            # Keep only last 10 sessions
+            await self.redis_client.ltrim(key, 0, 9)
+            
+            # Set expiration
+            await self.redis_client.expire(key, 86400 * 30)  # 30 days
+            
+        except Exception as e:
+            logger.error(f"Error updating sessions list: {e}")
+    
+    async def cleanup_old_chat_data(self, days_old: int = 7) -> int:
+        """Cleanup old chat data (manual cleanup for keys without TTL)"""
+        if not self.redis_client:
+            return 0
+        
+        try:
+            import time
+            cutoff_time = time.time() - (days_old * 86400)
+            
+            # This is a basic implementation - in production you'd want more sophisticated cleanup
+            pattern = "chat_session:*"
+            keys = await self.redis_client.keys(pattern)
+            
+            cleaned = 0
+            for key in keys:
+                # Check if key has TTL, if not - set it
+                ttl = await self.redis_client.ttl(key)
+                if ttl == -1:  # No expiration set
+                    await self.redis_client.expire(key, 86400 * 7)  # 7 days
+                    cleaned += 1
+            
+            logger.info(f"Set expiration for {cleaned} chat session keys")
+            return cleaned
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
             return 0
 
 

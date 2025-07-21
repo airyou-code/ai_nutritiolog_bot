@@ -34,17 +34,28 @@ class Settings(BaseSettings):
     # Nutrition analysis settings
     max_photo_size: int = Field(20 * 1024 * 1024, description="Max photo size in bytes (20MB)")
     
+    # Chat memory settings
+    chat_memory_ttl_hours: int = Field(168, description="Chat memory TTL in hours (default: 7 days)")
+    max_chat_topics_per_user: int = Field(20, description="Max recent topics to remember per user")
+    chat_cleanup_interval_hours: int = Field(24, description="How often to run chat cleanup (hours)")
+    enable_chat_persistence: bool = Field(True, description="Enable chat memory persistence")
+    
     @computed_field
     @property
     def effective_database_url(self) -> str:
         """Get the effective database URL, either from database_url or constructed from postgres_* fields"""
         if self.database_url:
+            # Ensure async driver is used
+            if self.database_url.startswith("postgresql://"):
+                return self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif self.database_url.startswith("postgresql+psycopg2://"):
+                return self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
             return self.database_url
         
-        # Construct from individual postgres fields
+        # Construct from individual postgres fields with async driver
         if all([self.postgres_db, self.postgres_user, self.postgres_password, self.postgres_host]):
             port = self.postgres_port or "5432"
-            return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{port}/{self.postgres_db}"
+            return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{port}/{self.postgres_db}"
         
         raise ValueError("Either database_url or all postgres_* fields must be provided")
     

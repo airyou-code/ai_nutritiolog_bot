@@ -10,10 +10,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.config.settings import settings
 from bot.database.connection import close_db
 from bot.services.redis_service import redis_service
+from bot.services.langgraph_service import langgraph_service
 from bot.middlewares.user_middleware import UserMiddleware
 
 # Import all handlers
-from bot.handlers import start, photo_analysis, text_input, diary, chat, profile
+from bot.handlers import start, photo_analysis, text_input, diary, chat, profile, universal_food_input
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +43,15 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"Redis connection failed: {e}")
         # Continue without Redis - it's optional
+    
+    # Initialize LangGraph service
+    try:
+        # Pre-initialize checkpointer to test Redis connection
+        await langgraph_service.get_checkpointer()
+        logger.info("LangGraph service initialized successfully")
+    except Exception as e:
+        logger.warning(f"LangGraph service initialization warning: {e}")
+        # Continue - LangGraph will work with memory fallback
     
     logger.info("Bot startup completed")
 
@@ -92,6 +102,7 @@ async def main():
     dp.include_router(diary.router)
     dp.include_router(chat.router)
     dp.include_router(profile.router)
+    dp.include_router(universal_food_input.router)  # Must be last for universal text handling
     
     # Register startup and shutdown handlers
     dp.startup.register(on_startup)

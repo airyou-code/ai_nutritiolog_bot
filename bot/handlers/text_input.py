@@ -31,25 +31,37 @@ class TextInputStates(StatesGroup):
     confirming_nutrition = State()
 
 
+# Old text input handler - now deprecated, replaced by universal_food_input.py
+# Keeping for backward compatibility, but functionality moved to universal handler
+
 @router.callback_query(F.data == "add_food_text")
 async def start_text_input(callback: CallbackQuery, state: FSMContext):
-    """Start text input process"""
+    """Redirect to universal text input (backward compatibility)"""
     
     await safe_answer_callback(callback)
     
     text = """
-✍️ **Добавление блюда текстом**
+✍️ **Добавление блюда**
 
-Выбери способ ввода:
+Просто напиши что ты ел! Я сам определю блюдо и размер порции.
+
+📝 **Примеры:**
+• "2 банана"
+• "тарелка борща" 
+• "кусочек хлеба"
+• "200г курицы"
+• "стакан молока"
+
+Чем точнее опишешь - тем лучше будет результат! 🎯
 """
     
     await callback.message.edit_text(
         text,
-        reply_markup=get_text_input_mode_keyboard(),
+        reply_markup=get_main_menu_keyboard(),
         parse_mode="Markdown"
     )
     
-    await state.set_state(TextInputStates.selecting_mode)
+    await state.clear()
 
 
 @router.callback_query(TextInputStates.selecting_mode, F.data == "text_mode_simple")
