@@ -1,8 +1,8 @@
 import logging
 from typing import Dict, Any, Optional
 
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram import Router, F, Bot
+from aiogram.types import Message, CallbackQuery, PhotoSize
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -16,6 +16,7 @@ from bot.services.nutrition_analyzer import nutrition_analyzer
 from bot.database.connection import get_db_session
 from bot.database.operations.food_ops import create_food_entry
 from bot.utils.helpers import safe_answer_callback
+from bot.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,72 @@ async def handle_universal_text_input(message: Message, state: FSMContext, user_
         except Exception:
             await message.answer(
                 "❌ Произошла ошибка при анализе. Попробуй еще раз или воспользуйся фото.",
+                            reply_markup=get_main_menu_keyboard()
+        )
+
+
+@router.message(F.photo & ~F.text.startswith('/'))
+async def handle_universal_photo_input(message: Message, state: FSMContext, bot: Bot, user_id: int):
+    """Universal handler for photo input - analyzes food photos"""
+    
+    # Skip if user is in specific states that should handle photos differently
+    current_state = await state.get_state()
+    if current_state and current_state in [
+        # Add other states that might need different photo handling
+    ]:
+        return
+    
+    try:
+        # Get the largest photo
+        photo: PhotoSize = message.photo[-1]
+        
+        # Check photo size
+        if photo.file_size and photo.file_size > settings.max_photo_size:
+            await message.answer(
+                "❌ Фото слишком большое! Максимальный размер: 20 МБ",
+                reply_markup=get_main_menu_keyboard()
+            )
+            return
+        
+        # Show processing message
+        processing_msg = await message.answer(
+            "🔄 Анализирую фотографию еды...\n\n"
+            "⏳ Это может занять несколько секунд"
+        )
+        
+        # Download photo
+        file_info = await bot.get_file(photo.file_id)
+        photo_data = await bot.download_file(file_info.file_path)
+        image_bytes = photo_data.read()
+        
+        # Get description from photo caption if provided
+        user_description = message.caption.strip() if message.caption else ""
+        
+        # Analyze photo
+        food_analysis = await nutrition_analyzer.analyze_food_from_photo(image_bytes, user_description)
+        
+        # Store analysis data in state
+        await state.update_data(
+            analysis=food_analysis,
+            input_method="photo_universal",
+            original_input=f"📸 Фото{f' с описанием: {user_description}' if user_description else ''}",
+            photo_file_id=photo.file_id,
+            user_description=user_description
+        )
+        
+        # Show portion selection using the same logic as text
+        await show_portion_selection(message, food_analysis, state, processing_msg)
+        
+    except Exception as e:
+        logger.error(f"Error in universal photo input: {e}")
+        try:
+            await processing_msg.edit_text(
+                "❌ Ошибка при анализе фотографии. Попробуй еще раз с другим фото.",
+                reply_markup=get_main_menu_keyboard()
+            )
+        except Exception:
+            await message.answer(
+                "❌ Ошибка при анализе фотографии. Попробуй еще раз с другим фото.",
                 reply_markup=get_main_menu_keyboard()
             )
 
@@ -407,10 +474,13 @@ async def confirm_nutrition_entry(callback: CallbackQuery, state: FSMContext, us
                 total_protein=nutrition["total_protein"],
                 total_fat=nutrition["total_fat"],
                 total_carbs=nutrition["total_carbs"],
-                photo_file_id=None,
+                photo_file_id=data.get("photo_file_id"),  # Include photo if it was photo input
                 input_method=data.get("input_method", "text_universal"),
                 ai_analysis=str(analysis)
             )
+        
+        # Format input method for display
+        input_icon = "📸" if data.get("input_method") == "photo_universal" else "📝"
         
         success_text = f"""
 ✅ **Блюдо добавлено в дневник!**
@@ -420,7 +490,7 @@ async def confirm_nutrition_entry(callback: CallbackQuery, state: FSMContext, us
 
 {nutrition_analyzer.format_nutrition_summary(nutrition)}
 
-📝 Твое описание: _{original_input}_
+{input_icon} Источник: _{original_input}_
 🕐 Время: сейчас
 📊 Запись #{food_entry.id}
 """

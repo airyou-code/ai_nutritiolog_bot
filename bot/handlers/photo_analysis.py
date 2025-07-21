@@ -31,18 +31,19 @@ class PhotoAnalysisStates(StatesGroup):
     confirming_nutrition = State()
 
 
+# OLD: Deprecated - now handled by universal_food_input.py
 @router.callback_query(F.data == "add_food_photo")
 async def start_photo_analysis(callback: CallbackQuery, state: FSMContext):
-    """Start photo analysis process"""
+    """Redirect to universal photo input (backward compatibility)"""
     
     await safe_answer_callback(callback)
     
     text = """
 📸 **Анализ фотографии еды**
 
-Отправь мне фотографию блюда, которое ты хочешь добавить в дневник питания.
+Просто отправь фотографию блюда! Я автоматически проанализирую её.
 
-📝 **Подсказка:** Можешь добавить описание прямо к фото (в подписи)! 
+📝 **Подсказка:** Можешь добавить описание к фото (в подписи)! 
 Например: "домашний борщ со сметаной" или "салат без майонеза"
 
 💡 **Советы для лучшего результата:**
@@ -50,21 +51,21 @@ async def start_photo_analysis(callback: CallbackQuery, state: FSMContext):
 • Обеспечь хорошее освещение  
 • Покажи размер порции
 • Избегай размытых фото
-• Добавь описание в подпись к фото
 """
     
     await callback.message.edit_text(
         text,
-        reply_markup=get_cancel_keyboard(),
+        reply_markup=get_main_menu_keyboard(),
         parse_mode="Markdown"
     )
     
-    await state.set_state(PhotoAnalysisStates.waiting_for_photo)
+    await state.clear()
 
 
+# OLD: Deprecated - now handled by universal_food_input.py
 @router.message(PhotoAnalysisStates.waiting_for_photo, F.photo)
 async def handle_food_photo(message: Message, state: FSMContext, bot: Bot, user_id: int):
-    """Handle received food photo"""
+    """Handle received food photo - DEPRECATED"""
     
     try:
         # Get the largest photo

@@ -97,12 +97,12 @@ async def main():
     
     # Include routers
     dp.include_router(start.router)
-    dp.include_router(photo_analysis.router)
-    dp.include_router(text_input.router)
+    dp.include_router(universal_food_input.router)  # Must be early for universal text/photo handling
+    dp.include_router(photo_analysis.router)  # Deprecated, kept for backward compatibility
+    dp.include_router(text_input.router)  # Deprecated, kept for backward compatibility
     dp.include_router(diary.router)
     dp.include_router(chat.router)
     dp.include_router(profile.router)
-    dp.include_router(universal_food_input.router)  # Must be last for universal text handling
     
     # Register startup and shutdown handlers
     dp.startup.register(on_startup)

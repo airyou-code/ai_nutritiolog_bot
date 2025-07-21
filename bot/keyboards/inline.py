@@ -9,12 +9,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     
     builder.row(
         InlineKeyboardButton(
-            text="📸 Сфотографировать еду",
-            callback_data="add_food_photo"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
             text="📊 Мой дневник питания",
             callback_data="view_diary"
         )
