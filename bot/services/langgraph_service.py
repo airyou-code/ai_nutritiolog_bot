@@ -453,9 +453,22 @@ class LangGraphService:
         """Get prompt for food photo analysis"""
         
         base_prompt = """
-        Проанализируй это изображение еды и верни результат в формате JSON:
-
+        Ты анализируешь изображение для приложения учета питания.
+        
+        ЗАДАЧА: Определить еду на фото и проанализировать её.
+        
+        ЕСЛИ НА ФОТО ОЧЕВИДНО НЕ ЕДА (люди, пейзажи, мебель, животные без еды), верни:
         {
+            "is_food": false,
+            "food_name": "",
+            "description": "На изображении не обнаружена еда",
+            "portion_options": [],
+            "nutrition_per_100g": {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+        }
+        
+        ЕСЛИ НА ФОТО ЕСТЬ ЕДА (фрукты, овощи, блюда, напитки), проанализируй:
+        {
+            "is_food": true,
             "food_name": "название блюда",
             "description": "краткое описание состава",
             "portion_options": [
@@ -469,24 +482,11 @@ class LangGraphService:
             }
         }
         
-        ВАЖНО для portion_options:
-        - Если на фото ТОЧНО видно количество/размер (например: 2 банана, 1 яблоко, конкретная тарелка) 
-          → дай ОДИН вариант с точным описанием
-        - Если количество/размер НЕОПРЕДЕЛЕННЫЙ (например: фрукты в вазе, кусок торта без привязки к размеру)
-          → дай 2-3 варианта:
-          [
-            {"size": "small", "weight": вес, "description": "описание маленькой порции"},
-            {"size": "medium", "weight": вес, "description": "описание средней порции"},
-            {"size": "large", "weight": вес, "description": "описание большой порции"}
-          ]
+        Логика для portion_options:
+        - Если ТОЧНО видно количество (2 банана, 1 яблоко, конкретная тарелка) → ОДИН вариант
+        - Если количество НЕОПРЕДЕЛЕННО → 2-3 варианта по размерам
         
-        Примеры:
-        - Фото 2 бананов → [{"size": "exact", "weight": 240, "description": "2 средних банана"}]
-        - Фото банана (количество неясно) → [{"size": "small", "weight": 120, "description": "1 банан"}, {"size": "medium", "weight": 240, "description": "2 банана"}, {"size": "large", "weight": 360, "description": "3 банана"}]
-        - Фото тарелки борща → [{"size": "exact", "weight": 300, "description": "тарелка борща"}]
-        - Фото куска торта (размер неясен) → варианты по размеру куска
-        
-        Будь точным в расчетах БЖУ. Если не можешь точно определить, укажи примерные значения для похожих блюд.
+        ВАЖНО: Банан, яблоко, овощи - это ЕДА! Отклоняй только если точно НЕ еда.
         """
         
         if user_description:
@@ -508,8 +508,20 @@ class LangGraphService:
         
         prompt += """
 
-        Формат ответа:
+        СНАЧАЛА проверь - это описание ЕДЫ?
+        
+        ЕСЛИ НЕ ЕДА (общие фразы, приветствия, вопросы), верни:
         {
+            "is_food": false,
+            "food_name": "",
+            "description": "Это не описание еды",
+            "portion_options": [],
+            "nutrition_per_100g": {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+        }
+        
+        ЕСЛИ ЭТО ЕДА, верни:
+        {
+            "is_food": true,
             "food_name": "название блюда",
             "description": "краткое описание состава",
             "portion_options": [
@@ -542,7 +554,7 @@ class LangGraphService:
         - "суп" → варианты по количеству (полтарелки/тарелка/большая порция)
         - "торт" → варианты по размеру куска
         
-        Если пользователь указал точное количество или размер - дай ОДИН точный вариант!
+        ВНИМАНИЕ: Строго фильтруй НЕ-ЕДУ. Лучше отклонить сомнительное.
         """
         
         return prompt
@@ -565,18 +577,17 @@ class LangGraphService:
             logger.error(f"Error parsing food analysis response: {e}")
             logger.error(f"Response content: {content}")
             
-            # Return default structure if parsing fails
+            # Return default structure if parsing fails  
             return {
-                "food_name": "Неизвестное блюдо",
-                "description": content[:200] + "..." if len(content) > 200 else content,
-                "portion_options": [
-                    {"size": "exact", "weight": 200, "description": "стандартная порция"}
-                ],
+                "is_food": False,
+                "food_name": "",
+                "description": "Ошибка анализа - не удалось определить блюдо",
+                "portion_options": [],
                 "nutrition_per_100g": {
-                    "calories": 200,
-                    "protein": 10,
-                    "fat": 10,
-                    "carbs": 25
+                    "calories": 0,
+                    "protein": 0,
+                    "fat": 0,
+                    "carbs": 0
                 }
             }
 

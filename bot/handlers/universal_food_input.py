@@ -88,15 +88,30 @@ async def handle_universal_text_input(message: Message, state: FSMContext, user_
         food_analysis = await food_input_agent.process_food_input(input_analysis)
         
         if food_analysis.get("not_food"):
+            not_food_message = f"""
+🤔 **Это не похоже на еду!**
+
+{food_analysis.get("message", "Я не смог определить блюдо в твоем сообщении.")}
+
+💡 **Попробуй написать конкретнее:**
+• "2 банана"
+• "тарелка супа"
+• "кусочек хлеба"
+• "стакан молока"
+
+Или отправь фото блюда! 📸
+"""
             try:
                 await processing_msg.edit_text(
-                    food_analysis["message"],
-                    reply_markup=get_main_menu_keyboard()
+                    not_food_message,
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
                 )
             except Exception:
                 await message.answer(
-                    food_analysis["message"],
-                    reply_markup=get_main_menu_keyboard()
+                    not_food_message,
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
                 )
             return
         
@@ -177,6 +192,34 @@ async def handle_universal_photo_input(message: Message, state: FSMContext, bot:
         
         # Analyze photo
         food_analysis = await nutrition_analyzer.analyze_food_from_photo(image_bytes, user_description)
+        
+        # Check if AI determined this is not food
+        if food_analysis.get("is_food") == False:
+            not_food_message = f"""
+🤔 **На фото не видно еды!**
+
+{food_analysis.get("description", "Я не смог найти блюда на этом изображении.")}
+
+💡 **Попробуй:**
+• Сфотографировать блюдо крупнее
+• Убедиться что на фото видна еда
+• Или написать описание блюда текстом
+
+Примеры: "2 банана", "тарелка супа", "кусочек торта"
+"""
+            try:
+                await processing_msg.edit_text(
+                    not_food_message,
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                await message.answer(
+                    not_food_message,
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            return
         
         # Store analysis data in state
         await state.update_data(

@@ -149,8 +149,20 @@ class NutritionAnalyzer:
     def _process_analysis_result(self, analysis: Dict) -> Dict:
         """Process and validate analysis result from OpenAI"""
 
+        # Check if AI determined this is not food
+        if analysis.get("is_food") == False:
+            logger.info("AI determined this is not food, returning not_food structure")
+            return {
+                "is_food": False,
+                "food_name": "",
+                "description": analysis.get("description", "На изображении не обнаружена еда"),
+                "portion_options": [],
+                "nutrition_per_100g": {"calories": 0, "protein": 0, "fat": 0, "carbs": 0},
+            }
+
         # Ensure all required fields exist with defaults
         processed = {
+            "is_food": True,
             "food_name": analysis.get("food_name", "Неизвестное блюдо"),
             "description": analysis.get("description", "Описание недоступно"),
             "portion_options": [],

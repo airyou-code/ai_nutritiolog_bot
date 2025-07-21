@@ -90,7 +90,23 @@ class FoodInputAgent:
     
     def _quick_food_detection(self, text: str) -> bool:
         """Quick regex-based food detection"""
-        text_lower = text.lower()
+        text_lower = text.lower().strip()
+        
+        # First check for obvious NON-food patterns (reject immediately)
+        non_food_patterns = [
+            r'^(привет|здравствуй|добрый день|доброе утро|добрый вечер|hi|hello).*',
+            r'^(как дела|что делаешь|как поживаешь|как жизнь|что нового).*',
+            r'^(спасибо|благодарю|thanks|пасиб).*',
+            r'^(пока|до свидания|увидимся|bye).*',
+            r'^(да|нет|не знаю|может быть|возможно)$',
+            r'^(хорошо|плохо|нормально|отлично|классно|ужасно)$',
+            r'^(помоги|помощь|что делать|не понимаю).*',
+            r'^[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]*$',  # только символы
+        ]
+        
+        for pattern in non_food_patterns:
+            if re.search(pattern, text_lower):
+                return False
         
         # Common food-related keywords
         food_keywords = [
@@ -103,7 +119,7 @@ class FoodInputAgent:
             # Fruits/vegetables
             'банан', 'яблок', 'апельсин', 'груш', 'помидор', 'огурец', 'морковь',
             # Drinks
-            'чай', 'кофе', 'сок', 'вода', 'молоко', 'кефир', 'компот',
+            'чай', 'кофе', 'сок', 'молоко', 'кефир', 'компот',
             # Quantities
             'грамм', 'килограмм', 'литр', 'миллилитр', 'штук', 'кусочек', 'тарелка',
             'стакан', 'чашка', 'ложка', 'порция'
@@ -200,28 +216,38 @@ class FoodInputAgent:
     def _get_input_analysis_prompt(self) -> str:
         """Get prompt for input analysis"""
         return """
-        Ты анализируешь пользовательский ввод, чтобы понять, связан ли он с едой.
+        Ты строгий анализатор пользовательского ввода для приложения учета питания.
         
-        Определи:
-        1. Относится ли текст к еде/питанию?
-        2. Если да - какой тип анализа нужен?
-        3. Извлеки описание блюда и информацию о порции
+        ЗАДАЧА: Определить, описывает ли пользователь КОНКРЕТНУЮ ЕДУ или БЛЮДО.
         
-        Верни результат в формате JSON:
+        ОЧЕНЬ ВАЖНО: Отклоняй ВСЕ что НЕ является едой:
+        - Приветствия: "привет", "здравствуй", "добрый день"
+        - Вопросы: "как дела", "что делать", "помоги"
+        - Общие фразы: "спасибо", "пока", "да", "нет"
+        - Эмоции: "классно", "плохо", "хорошо"
+        
+        ПРИНИМАЙ только еду:
+        - Названия блюд: "борщ", "салат цезарь", "куриная грудка"
+        - Продукты: "банан", "молоко", "хлеб"
+        - С количеством: "2 яблока", "стакан воды", "тарелка супа"
+        
+        Формат ответа JSON:
         {
             "is_food_related": true/false,
             "analysis_type": "exact"/"approximate"/"need_clarification"/"not_food",
-            "food_description": "описание блюда",
+            "food_description": "название еды или пустая строка",
             "portion_info": "информация о порции или null",
             "confidence": 0.0-1.0,
-            "reasoning": "объяснение решения"
+            "reasoning": "почему это еда или не еда"
         }
         
         Типы анализа:
         - "exact": точные измерения (200г курицы, 2 банана, стакан молока)
         - "approximate": нечеткие описания (большая порция, салат цезарь)
         - "need_clarification": слишком неясно (просто "еда", "что-то вкусное")
-        - "not_food": не связано с едой (привет, как дела)
+        - "not_food": НЕ связано с едой (привет, как дела, спасибо)
+        
+        ВНИМАНИЕ: Будь очень строгим! Лучше отклонить сомнительный случай.
         """
     
     def _parse_input_analysis(self, content: str) -> Dict[str, Any]:
@@ -341,28 +367,29 @@ class FoodInputAgent:
         except Exception as e:
             logger.error(f"Error processing food input: {e}")
             
-            # Return fallback response
+            # Return not_food response on error
             return {
-                "food_name": food_description or "Неизвестное блюдо",
-                "description": f"Простой анализ: {food_description}",
-                "portion_options": [
-                    {"size": "exact", "weight": 200, "description": "стандартная порция"}
-                ],
-                "nutrition_per_100g": {
-                    "calories": 200,
-                    "protein": 10,
-                    "fat": 10,
-                    "carbs": 25
-                }
+                "not_food": True,
+                "message": f"Не удалось проанализировать '{food_description}' как еду. Попробуй описать конкретное блюдо."
             }
     
     def _validate_food_analysis(self, analysis: Dict[str, Any]) -> None:
         """Validate that food analysis has all required fields"""
+        
+        # Check if AI determined this is not food
+        if analysis.get("is_food") == False:
+            raise ValueError("AI determined this is not food")
+        
         required_fields = ["food_name", "description", "portion_options", "nutrition_per_100g"]
         
         for field in required_fields:
             if field not in analysis:
                 raise ValueError(f"Missing required field: {field}")
+        
+        # Check if food_name is empty or generic
+        food_name = analysis.get("food_name", "").strip()
+        if not food_name or food_name.lower() in ["неизвестное блюдо", "неопределенное блюдо", "", "как дела"]:
+            raise ValueError("Invalid or empty food name")
         
         # Validate nutrition_per_100g structure
         nutrition = analysis["nutrition_per_100g"]
@@ -371,6 +398,11 @@ class FoodInputAgent:
         for field in required_nutrition_fields:
             if field not in nutrition:
                 raise ValueError(f"Missing nutrition field: {field}")
+        
+        # Check if nutrition values are reasonable (not all zeros)
+        total_nutrition = sum(nutrition.get(field, 0) for field in required_nutrition_fields)
+        if total_nutrition == 0:
+            raise ValueError("All nutrition values are zero - likely not food")
         
         # Validate portion_options structure
         if not isinstance(analysis["portion_options"], list) or len(analysis["portion_options"]) == 0:
