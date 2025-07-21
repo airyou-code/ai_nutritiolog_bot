@@ -94,12 +94,6 @@ def get_diary_keyboard() -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(
-            text="🗓 Выбрать дату",
-            callback_data="diary_date"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
             text="🏠 Главное меню",
             callback_data="main_menu"
         )

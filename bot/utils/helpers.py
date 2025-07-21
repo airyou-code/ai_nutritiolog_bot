@@ -48,6 +48,30 @@ async def safe_answer_callback(callback: CallbackQuery, text: str = "✅") -> bo
         return False
 
 
+async def safe_edit_callback_message(
+    callback: CallbackQuery,
+    text: str,
+    reply_markup=None,
+    parse_mode: Optional[str] = None
+) -> bool:
+    """Safely edit callback message, handle 'message not modified' errors"""
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+        return True
+    except Exception as e:
+        if "message is not modified" in str(e).lower():
+            # Message content is the same - just answer callback without error
+            logger.debug(f"Message not modified, skipping edit: {e}")
+            return True
+        else:
+            logger.error(f"Failed to edit callback message: {e}")
+            return False
+
+
 def extract_numbers_from_text(text: str) -> Dict[str, float]:
     """Extract weight/portion numbers from text"""
     

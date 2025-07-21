@@ -5,7 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from bot.keyboards.inline import get_main_menu_keyboard, get_back_to_menu_keyboard
-from bot.utils.helpers import safe_answer_callback
+from bot.utils.helpers import safe_answer_callback, safe_edit_callback_message
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,8 @@ async def show_main_menu(callback: CallbackQuery, state: FSMContext):
 Выберите действие:
 """
     
-    await callback.message.edit_text(
+    await safe_edit_callback_message(
+        callback,
         menu_text,
         reply_markup=get_main_menu_keyboard(),
         parse_mode="Markdown"
@@ -109,7 +110,8 @@ async def show_about(callback: CallbackQuery):
 Версия: 1.0.0
 """
     
-    await callback.message.edit_text(
+    await safe_edit_callback_message(
+        callback,
         about_text,
         reply_markup=get_back_to_menu_keyboard(),
         parse_mode="Markdown"

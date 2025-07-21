@@ -21,7 +21,7 @@ from bot.database.operations.food_ops import (
 )
 from bot.database.operations.user_ops import get_user_by_id
 from bot.services.nutrition_analyzer import nutrition_analyzer
-from bot.utils.helpers import safe_answer_callback, generate_food_entry_summary
+from bot.utils.helpers import safe_answer_callback, generate_food_entry_summary, safe_edit_callback_message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 
@@ -42,7 +42,8 @@ async def show_diary_menu(callback: CallbackQuery, state: FSMContext):
 Выбери что показать:
 """
     
-    await callback.message.edit_text(
+    await safe_edit_callback_message(
+        callback,
         text,
         reply_markup=get_diary_keyboard(),
         parse_mode="Markdown"
@@ -334,20 +335,36 @@ async def show_diary_stats(callback: CallbackQuery, user_id: int):
     
     try:
         async with get_db_session() as session:
-            # Get stats for last 7 days
-            end_date = date.today()
-            start_date = end_date - timedelta(days=6)
+            # Get current week (Monday to Sunday)
+            today = date.today()
+            days_since_monday = today.weekday()  # Monday is 0
             
-            # Calculate averages
+            # Calculate week start (Monday) and end (Sunday)
+            week_start = today - timedelta(days=days_since_monday)
+            week_end = week_start + timedelta(days=6)
+            
+            # Calculate averages for the week
             total_calories = 0
             total_protein = 0
             total_fat = 0
             total_carbs = 0
             days_with_data = 0
             
+            # Daily breakdown for the week
+            daily_data = []
+            week_days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            
             for i in range(7):
-                check_date = start_date + timedelta(days=i)
+                check_date = week_start + timedelta(days=i)
                 daily_summary = await get_user_daily_nutrition_summary(session, user_id, check_date)
+                
+                # Store daily data
+                daily_data.append({
+                    'day': week_days[i],
+                    'date': check_date,
+                    'calories': daily_summary['total_calories'],
+                    'entries': daily_summary['entries_count']
+                })
                 
                 if daily_summary['entries_count'] > 0:
                     total_calories += daily_summary['total_calories']
@@ -357,8 +374,10 @@ async def show_diary_stats(callback: CallbackQuery, user_id: int):
                     days_with_data += 1
             
             if days_with_data == 0:
-                text = """
-📊 **Статистика питания**
+                text = f"""
+📊 **Статистика за неделю**
+
+📅 {week_start.strftime('%d.%m')} - {week_end.strftime('%d.%m.%Y')} (пн-вс)
 
 📈 Недостаточно данных для статистики.
 
@@ -370,8 +389,20 @@ async def show_diary_stats(callback: CallbackQuery, user_id: int):
                 avg_fat = total_fat / days_with_data
                 avg_carbs = total_carbs / days_with_data
                 
+                # Build daily breakdown
+                daily_breakdown = "\n📊 **По дням:**\n"
+                for day_data in daily_data:
+                    status = "✅" if day_data['entries'] > 0 else "⭕"
+                    date_str = day_data['date'].strftime('%d.%m')
+                    if day_data['entries'] > 0:
+                        daily_breakdown += f"{status} {day_data['day']} {date_str}: {day_data['calories']:.0f} ккал\n"
+                    else:
+                        daily_breakdown += f"{status} {day_data['day']} {date_str}: нет записей\n"
+                
                 text = f"""
 📊 **Статистика за неделю**
+
+📅 {week_start.strftime('%d.%m')} - {week_end.strftime('%d.%m.%Y')} (пн-вс)
 
 📈 **Средние показатели в день:**
 🔥 Калории: {avg_calories:.0f} ккал
@@ -380,12 +411,13 @@ async def show_diary_stats(callback: CallbackQuery, user_id: int):
 🍞 Углеводы: {avg_carbs:.1f} г
 
 📅 Дней с записями: {days_with_data} из 7
-
+{daily_breakdown}
 💡 **Рекомендации:**
 {'✅ Отлично! Ведешь регулярный учет' if days_with_data >= 5 else '📝 Старайся записывать еду каждый день'}
 """
         
-        await callback.message.edit_text(
+        await safe_edit_callback_message(
+            callback,
             text,
             reply_markup=get_diary_keyboard(),
             parse_mode="Markdown"
@@ -394,7 +426,8 @@ async def show_diary_stats(callback: CallbackQuery, user_id: int):
     except Exception as e:
         logger.error(f"Error showing diary stats: {e}")
         
-        await callback.message.edit_text(
+        await safe_edit_callback_message(
+            callback,
             "❌ Ошибка при загрузке статистики",
             reply_markup=get_diary_keyboard()
         ) 
