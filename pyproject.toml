@@ -46,6 +46,20 @@ dev-dependencies = [
 # Set the maximum line length to 88 (black's default)
 line-length = 88
 
+# Exclude specific files and directories
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "alembic/versions",
+    "migrations",
+]
+
+# Set target Python version
+target-version = "py312"
+
+[tool.ruff.lint]
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
 # Additionally enable:
 # - isort (`I`) for import sorting
@@ -61,18 +75,11 @@ ignore = [
     "E203",  # Whitespace before ':' (conflicts with black)
 ]
 
-# Exclude specific files and directories
-exclude = [
-    ".git",
-    "__pycache__",
-    ".venv",
-    "venv",
-    "alembic/versions",
-    "migrations",
-]
-
-# Set target Python version
-target-version = "py312"
+[tool.ruff.lint.isort]
+# Group imports by type
+known-first-party = ["bot"]
+force-single-line = false
+split-on-trailing-comma = true
 
 [tool.ruff.format]
 # Use double quotes for strings
@@ -82,10 +89,4 @@ quote-style = "double"
 indent-style = "space"
 
 # Respect magic trailing commas
-skip-magic-trailing-comma = false
-
-[tool.ruff.isort]
-# Group imports by type
-known-first-party = ["bot"]
-force-single-line = false
-split-on-trailing-comma = true 
+skip-magic-trailing-comma = false 

@@ -1,6 +1,5 @@
-import logging
 import hashlib
-from typing import Dict, List, Optional, Tuple
+import logging
 
 from bot.services.redis_service import redis_service
 
@@ -14,11 +13,12 @@ class NutritionAnalyzer:
         self.redis_service = redis_service
         # Import here to avoid circular imports
         from bot.services.langgraph_service import langgraph_service
+
         self.langgraph_service = langgraph_service
 
     async def analyze_food_from_photo(
-        self, image_data: bytes, user_description: Optional[str] = None
-    ) -> Dict:
+        self, image_data: bytes, user_description: str | None = None
+    ) -> dict:
         """Analyze food from photo with caching"""
 
         # Create cache key from image hash
@@ -54,8 +54,8 @@ class NutritionAnalyzer:
             raise
 
     async def analyze_food_from_text(
-        self, food_description: str, portion_info: Optional[str] = None
-    ) -> Dict:
+        self, food_description: str, portion_info: str | None = None
+    ) -> dict:
         """Analyze food from text description with caching"""
 
         # Create cache key from description
@@ -87,8 +87,8 @@ class NutritionAnalyzer:
             raise
 
     def calculate_nutrition_for_portion(
-        self, nutrition_per_100g: Dict, portion_weight: float
-    ) -> Dict:
+        self, nutrition_per_100g: dict, portion_weight: float
+    ) -> dict:
         """Calculate total nutrition for specific portion weight"""
 
         multiplier = portion_weight / 100.0
@@ -101,7 +101,7 @@ class NutritionAnalyzer:
             "portion_weight": portion_weight,
         }
 
-    def create_portion_options_with_nutrition(self, analysis: Dict) -> List[Dict]:
+    def create_portion_options_with_nutrition(self, analysis: dict) -> list[dict]:
         """Create portion options with calculated nutrition"""
 
         portion_options = []
@@ -124,8 +124,8 @@ class NutritionAnalyzer:
         return portion_options
 
     def calculate_daily_nutrition_percentage(
-        self, current_nutrition: Dict, daily_goals: Optional[Dict] = None
-    ) -> Dict:
+        self, current_nutrition: dict, daily_goals: dict | None = None
+    ) -> dict:
         """Calculate percentage of daily nutrition goals achieved"""
 
         if not daily_goals:
@@ -146,18 +146,25 @@ class NutritionAnalyzer:
 
         return percentages
 
-    def _process_analysis_result(self, analysis: Dict) -> Dict:
+    def _process_analysis_result(self, analysis: dict) -> dict:
         """Process and validate analysis result from OpenAI"""
 
         # Check if AI determined this is not food
-        if analysis.get("is_food") == False:
+        if not analysis.get("is_food"):
             logger.info("AI determined this is not food, returning not_food structure")
             return {
                 "is_food": False,
                 "food_name": "",
-                "description": analysis.get("description", "На изображении не обнаружена еда"),
+                "description": analysis.get(
+                    "description", "На изображении не обнаружена еда"
+                ),
                 "portion_options": [],
-                "nutrition_per_100g": {"calories": 0, "protein": 0, "fat": 0, "carbs": 0},
+                "nutrition_per_100g": {
+                    "calories": 0,
+                    "protein": 0,
+                    "fat": 0,
+                    "carbs": 0,
+                },
             }
 
         # Ensure all required fields exist with defaults
@@ -206,18 +213,19 @@ class NutritionAnalyzer:
             ]
 
         return processed
-    
-    def _generate_smart_default_portions(self, food_name: str) -> List[Dict]:
+
+    def _generate_smart_default_portions(self, food_name: str) -> list[dict]:
         """Generate smart default portions based on food name"""
-        
+
         food_lower = food_name.lower()
-        
+
         # Check if food name contains specific quantity
         import re
-        numbers = re.findall(r'\d+', food_name)
-        
+
+        numbers = re.findall(r"\d+", food_name)
+
         # Fruits and vegetables
-        if any(fruit in food_lower for fruit in ['банан', 'яблок', 'апельсин', 'груш']):
+        if any(fruit in food_lower for fruit in ["банан", "яблок", "апельсин", "груш"]):
             if numbers:  # If specific quantity mentioned
                 qty = int(numbers[0])
                 weight = qty * 120  # average fruit weight
@@ -226,67 +234,71 @@ class NutritionAnalyzer:
                 return [
                     {"size": "small", "weight": 120, "description": "1 штука"},
                     {"size": "medium", "weight": 240, "description": "2 штуки"},
-                    {"size": "large", "weight": 360, "description": "3 штуки"}
+                    {"size": "large", "weight": 360, "description": "3 штуки"},
                 ]
-        
+
         # Bread and bakery
-        elif any(bread in food_lower for bread in ['хлеб', 'булочк', 'батон', 'кусочек']):
-            if 'кусочек' in food_lower or numbers:
+        elif any(
+            bread in food_lower for bread in ["хлеб", "булочк", "батон", "кусочек"]
+        ):
+            if "кусочек" in food_lower or numbers:
                 return [{"size": "exact", "weight": 30, "description": "кусочек"}]
             else:
                 return [
                     {"size": "small", "weight": 30, "description": "1 кусочек"},
                     {"size": "medium", "weight": 60, "description": "2 кусочка"},
-                    {"size": "large", "weight": 90, "description": "3 кусочка"}
+                    {"size": "large", "weight": 90, "description": "3 кусочка"},
                 ]
-        
+
         # Drinks
-        elif any(drink in food_lower for drink in ['стакан', 'кружк', 'чашк', 'бутылк']):
-            if 'стакан' in food_lower:
+        elif any(
+            drink in food_lower for drink in ["стакан", "кружк", "чашк", "бутылк"]
+        ):
+            if "стакан" in food_lower:
                 return [{"size": "exact", "weight": 250, "description": "стакан"}]
-            elif 'кружк' in food_lower or 'чашк' in food_lower:
+            elif "кружк" in food_lower or "чашк" in food_lower:
                 return [{"size": "exact", "weight": 300, "description": "кружка"}]
-            elif 'бутылк' in food_lower:
+            elif "бутылк" in food_lower:
                 return [{"size": "exact", "weight": 500, "description": "бутылка"}]
-        
+
         # Soups and liquid dishes
-        elif any(soup in food_lower for soup in ['суп', 'борщ', 'щи', 'похлебк']):
-            if 'тарелк' in food_lower:
+        elif any(soup in food_lower for soup in ["суп", "борщ", "щи", "похлебк"]):
+            if "тарелк" in food_lower:
                 return [{"size": "exact", "weight": 300, "description": "тарелка"}]
             else:
                 return [
                     {"size": "small", "weight": 200, "description": "полтарелки"},
                     {"size": "medium", "weight": 300, "description": "тарелка"},
-                    {"size": "large", "weight": 400, "description": "большая тарелка"}
+                    {"size": "large", "weight": 400, "description": "большая тарелка"},
                 ]
-        
+
         # Porridge and cereals
-        elif any(cereal in food_lower for cereal in ['каш', 'овсянк', 'гречк', 'рис']):
-            if 'тарелк' in food_lower:
+        elif any(cereal in food_lower for cereal in ["каш", "овсянк", "гречк", "рис"]):
+            if "тарелк" in food_lower:
                 return [{"size": "exact", "weight": 200, "description": "тарелка каши"}]
             else:
                 return [
                     {"size": "small", "weight": 150, "description": "маленькая порция"},
                     {"size": "medium", "weight": 200, "description": "средняя порция"},
-                    {"size": "large", "weight": 250, "description": "большая порция"}
+                    {"size": "large", "weight": 250, "description": "большая порция"},
                 ]
-        
+
         # Default case - check if specific quantity mentioned
         elif numbers:
             # If we found numbers but don't know the food type, use moderate weight
             qty = int(numbers[0])
             weight = qty * 100  # 100g per unit as default
             return [{"size": "exact", "weight": weight, "description": f"{qty} порций"}]
-        
+
         else:
             # Generic unknown food - provide options
             return [
                 {"size": "small", "weight": 100, "description": "маленькая порция"},
                 {"size": "medium", "weight": 200, "description": "средняя порция"},
-                {"size": "large", "weight": 300, "description": "большая порция"}
+                {"size": "large", "weight": 300, "description": "большая порция"},
             ]
 
-    def format_nutrition_summary(self, nutrition: Dict) -> str:
+    def format_nutrition_summary(self, nutrition: dict) -> str:
         """Format nutrition data as readable text"""
 
         return (
@@ -297,7 +309,7 @@ class NutritionAnalyzer:
         )
 
     def format_daily_summary(
-        self, daily_nutrition: Dict, goals: Optional[Dict] = None
+        self, daily_nutrition: dict, goals: dict | None = None
     ) -> str:
         """Format daily nutrition summary"""
 

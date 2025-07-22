@@ -1,10 +1,11 @@
 import logging
-from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
 
-from bot.keyboards.inline import get_main_menu_keyboard, get_back_to_menu_keyboard
+from aiogram import F, Router
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+
+from bot.keyboards.inline import get_back_to_menu_keyboard, get_main_menu_keyboard
 from bot.utils.helpers import safe_answer_callback, safe_edit_callback_message
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,11 @@ router = Router()
 @router.message(CommandStart())
 async def start_command(message: Message, db_user, user_id: int):
     """Handle /start command"""
-    
+
     welcome_text = f"""
 🍎 **Добро пожаловать в ИИ Нутрициолог!**
 
-Привет, {db_user.full_name if db_user else 'пользователь'}! 👋
+Привет, {db_user.full_name if db_user else "пользователь"}! 👋
 
 Я помогу тебе:
 • 📸 Анализировать фотографии еды
@@ -42,43 +43,41 @@ async def start_command(message: Message, db_user, user_id: int):
 
 Или выбери действие в меню ниже! 👇
 """
-    
+
     await message.answer(
-        welcome_text,
-        reply_markup=get_main_menu_keyboard(),
-        parse_mode="Markdown"
+        welcome_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown"
     )
 
 
 @router.callback_query(F.data == "main_menu")
 async def show_main_menu(callback: CallbackQuery, state: FSMContext):
     """Show main menu"""
-    
+
     await safe_answer_callback(callback)
-    
+
     # Clear any existing state
     await state.clear()
-    
+
     menu_text = """
 🏠 **Главное меню**
 
 Выберите действие:
 """
-    
+
     await safe_edit_callback_message(
         callback,
         menu_text,
         reply_markup=get_main_menu_keyboard(),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 
 @router.callback_query(F.data == "about")
 async def show_about(callback: CallbackQuery):
     """Show information about the bot"""
-    
+
     await safe_answer_callback(callback)
-    
+
     about_text = """
 ℹ️ **О боте**
 
@@ -109,24 +108,24 @@ async def show_about(callback: CallbackQuery):
 
 Версия: 1.0.0
 """
-    
+
     await safe_edit_callback_message(
         callback,
         about_text,
         reply_markup=get_back_to_menu_keyboard(),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 
 @router.callback_query(F.data == "cancel")
 async def cancel_action(callback: CallbackQuery, state: FSMContext):
     """Cancel current action and return to main menu"""
-    
+
     await safe_answer_callback(callback, "Отменено")
-    
+
     # Clear state
     await state.clear()
-    
+
     # Show main menu
     await show_main_menu(callback, state)
 
@@ -134,27 +133,25 @@ async def cancel_action(callback: CallbackQuery, state: FSMContext):
 @router.message(Command("menu"))
 async def menu_command(message: Message, state: FSMContext):
     """Handle /menu command"""
-    
+
     # Clear any existing state
     await state.clear()
-    
+
     menu_text = """
 🏠 **Главное меню**
 
 Выберите действие:
 """
-    
+
     await message.answer(
-        menu_text,
-        reply_markup=get_main_menu_keyboard(),
-        parse_mode="Markdown"
+        menu_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown"
     )
 
 
 @router.message(Command("help"))
 async def help_command(message: Message):
     """Handle /help command"""
-    
+
     help_text = """
 ❓ **Помощь**
 
@@ -189,9 +186,7 @@ async def help_command(message: Message):
 
 Нужна помощь? Напиши в поддержку!
 """
-    
+
     await message.answer(
-        help_text,
-        reply_markup=get_back_to_menu_keyboard(),
-        parse_mode="Markdown"
-    ) 
+        help_text, reply_markup=get_back_to_menu_keyboard(), parse_mode="Markdown"
+    )

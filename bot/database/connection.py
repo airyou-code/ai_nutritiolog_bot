@@ -1,6 +1,6 @@
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     """Base class for all database models"""
+
     pass
 
 
@@ -59,4 +60,4 @@ async def create_tables():
 async def close_db():
     """Close database connections"""
     await engine.dispose()
-    logger.info("Database connections closed") 
+    logger.info("Database connections closed")

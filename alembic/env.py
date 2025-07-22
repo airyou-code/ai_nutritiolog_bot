@@ -1,9 +1,8 @@
-from logging.config import fileConfig
-import sys
 import os
+import sys
+from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -11,16 +10,18 @@ from alembic import context
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our models and settings
-from bot.database.connection import Base
-from bot.database.models import TelegramUser, FoodEntry  # noqa: F401
 from bot.config.settings import settings
+from bot.database.connection import Base
+from bot.database.models import FoodEntry, TelegramUser  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
 # Set the database URL from our settings (convert async URL to sync for Alembic)
-sync_database_url = settings.effective_database_url.replace("postgresql+asyncpg://", "postgresql://")
+sync_database_url = settings.effective_database_url.replace(
+    "postgresql+asyncpg://", "postgresql://"
+)
 config.set_main_option("sqlalchemy.url", sync_database_url)
 
 # Interpret the config file for Python logging.
@@ -76,9 +77,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
