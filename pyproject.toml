@@ -38,4 +38,54 @@ dev-dependencies = [
     "black>=23.0.0",
     "isort>=5.0.0",
     "mypy>=1.0.0",
+    "ruff>=0.1.0",
 ] 
+
+# Ruff configuration
+[tool.ruff]
+# Set the maximum line length to 88 (black's default)
+line-length = 88
+
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+# Additionally enable:
+# - isort (`I`) for import sorting
+# - pyupgrade (`UP`) for syntax upgrades
+# - flake8-bugbear (`B`) for likely bugs
+# - flake8-simplify (`SIM`) for code simplification
+# - flake8-comprehensions (`C4`) for comprehension improvements
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+# Ignore specific rules
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "E203",  # Whitespace before ':' (conflicts with black)
+]
+
+# Exclude specific files and directories
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "alembic/versions",
+    "migrations",
+]
+
+# Set target Python version
+target-version = "py312"
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Use spaces instead of tabs
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+[tool.ruff.isort]
+# Group imports by type
+known-first-party = ["bot"]
+force-single-line = false
+split-on-trailing-comma = true 

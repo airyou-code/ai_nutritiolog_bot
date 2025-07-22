@@ -593,4 +593,4 @@ class LangGraphService:
 
 
 # Global service instance
-langgraph_service = LangGraphService() 
+langgraph_service = LangGraphService()
