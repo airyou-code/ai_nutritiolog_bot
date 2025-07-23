@@ -189,8 +189,8 @@ class NutritionAnalyzer:
         # Validate and process portion options
         portions = analysis.get("portion_options", [])
         if not portions:
-            # Generate smart default portions based on food name
-            portions = self._generate_smart_default_portions(processed["food_name"])
+            processed["portion_options"] = []
+            return processed
 
         for portion in portions:
             if isinstance(portion, dict) and "size" in portion and "weight" in portion:
@@ -208,95 +208,9 @@ class NutritionAnalyzer:
 
         # Ensure we have at least one portion option
         if not processed["portion_options"]:
-            processed["portion_options"] = [
-                {"size": "exact", "weight": 200, "description": "стандартная порция"}
-            ]
+            processed["portion_options"] = []
 
         return processed
-
-    def _generate_smart_default_portions(self, food_name: str) -> list[dict]:
-        """Generate smart default portions based on food name"""
-
-        food_lower = food_name.lower()
-
-        # Check if food name contains specific quantity
-        import re
-
-        numbers = re.findall(r"\d+", food_name)
-
-        # Fruits and vegetables
-        if any(fruit in food_lower for fruit in ["банан", "яблок", "апельсин", "груш"]):
-            if numbers:  # If specific quantity mentioned
-                qty = int(numbers[0])
-                weight = qty * 120  # average fruit weight
-                return [{"size": "exact", "weight": weight, "description": f"{qty} шт"}]
-            else:  # Generic fruit
-                return [
-                    {"size": "small", "weight": 120, "description": "1 штука"},
-                    {"size": "medium", "weight": 240, "description": "2 штуки"},
-                    {"size": "large", "weight": 360, "description": "3 штуки"},
-                ]
-
-        # Bread and bakery
-        elif any(
-            bread in food_lower for bread in ["хлеб", "булочк", "батон", "кусочек"]
-        ):
-            if "кусочек" in food_lower or numbers:
-                return [{"size": "exact", "weight": 30, "description": "кусочек"}]
-            else:
-                return [
-                    {"size": "small", "weight": 30, "description": "1 кусочек"},
-                    {"size": "medium", "weight": 60, "description": "2 кусочка"},
-                    {"size": "large", "weight": 90, "description": "3 кусочка"},
-                ]
-
-        # Drinks
-        elif any(
-            drink in food_lower for drink in ["стакан", "кружк", "чашк", "бутылк"]
-        ):
-            if "стакан" in food_lower:
-                return [{"size": "exact", "weight": 250, "description": "стакан"}]
-            elif "кружк" in food_lower or "чашк" in food_lower:
-                return [{"size": "exact", "weight": 300, "description": "кружка"}]
-            elif "бутылк" in food_lower:
-                return [{"size": "exact", "weight": 500, "description": "бутылка"}]
-
-        # Soups and liquid dishes
-        elif any(soup in food_lower for soup in ["суп", "борщ", "щи", "похлебк"]):
-            if "тарелк" in food_lower:
-                return [{"size": "exact", "weight": 300, "description": "тарелка"}]
-            else:
-                return [
-                    {"size": "small", "weight": 200, "description": "полтарелки"},
-                    {"size": "medium", "weight": 300, "description": "тарелка"},
-                    {"size": "large", "weight": 400, "description": "большая тарелка"},
-                ]
-
-        # Porridge and cereals
-        elif any(cereal in food_lower for cereal in ["каш", "овсянк", "гречк", "рис"]):
-            if "тарелк" in food_lower:
-                return [{"size": "exact", "weight": 200, "description": "тарелка каши"}]
-            else:
-                return [
-                    {"size": "small", "weight": 150, "description": "маленькая порция"},
-                    {"size": "medium", "weight": 200, "description": "средняя порция"},
-                    {"size": "large", "weight": 250, "description": "большая порция"},
-                ]
-
-        # Default case - check if specific quantity mentioned
-        elif numbers:
-            # If we found numbers but don't know the food type, use moderate weight
-            qty = int(numbers[0])
-            weight = qty * 100  # 100g per unit as default
-            return [{"size": "exact", "weight": weight, "description": f"{qty} порций"}]
-
-        else:
-            # Generic unknown food - provide options
-            return [
-                {"size": "small", "weight": 100, "description": "маленькая порция"},
-                {"size": "medium", "weight": 200, "description": "средняя порция"},
-                {"size": "large", "weight": 300, "description": "большая порция"},
-            ]
 
     def format_nutrition_summary(self, nutrition: dict) -> str:
         """Format nutrition data as readable text"""

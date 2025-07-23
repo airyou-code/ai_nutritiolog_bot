@@ -15,8 +15,8 @@ from bot.keyboards.inline import (
 )
 from bot.services.nutrition_analyzer import nutrition_analyzer
 from bot.utils.helpers import (
-    extract_numbers_from_text,
     safe_answer_callback,
+    format_datetime,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ async def start_text_input(callback: CallbackQuery, state: FSMContext):
 
 📝 **Примеры:**
 • "2 банана"
-• "тарелка борща" 
+• "тарелка борща"
 • "кусочек хлеба"
 • "200г курицы"
 • "стакан молока"
@@ -149,26 +149,8 @@ async def handle_detailed_text_input(message: Message, state: FSMContext, user_i
         )
         return
 
-    # Extract portion information from text
-    numbers = extract_numbers_from_text(food_description)
-    portion_info = None
-
-    if numbers:
-        # Build portion info string
-        portions = []
-        for unit, value in numbers.items():
-            if unit == "grams":
-                portions.append(f"{value}г")
-            elif unit == "kg":
-                portions.append(f"{value}кг")
-            elif unit == "pieces":
-                portions.append(f"{value} штук")
-            # Add more unit mappings as needed
-
-        if portions:
-            portion_info = ", ".join(portions)
-
-    await process_text_input(message, state, food_description, portion_info)
+    # Не извлекаем portion_info вручную, всё делегируем ИИ
+    await process_text_input(message, state, food_description, None)
 
 
 async def process_text_input(

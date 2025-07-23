@@ -14,7 +14,7 @@ from bot.keyboards.inline import (
     get_chat_actions_keyboard,
 )
 from bot.services.langgraph_service import langgraph_service
-from bot.utils.helpers import is_food_related_message, safe_answer_callback
+from bot.utils.helpers import safe_answer_callback
 
 logger = logging.getLogger(__name__)
 
@@ -26,68 +26,7 @@ class ChatStates(StatesGroup):
     streaming_response = State()
 
 
-def should_use_langgraph(question: str, nutrition_data: dict = None) -> bool:
-    """Determine if we should use LangGraph for this question"""
-
-    question_lower = question.lower()
-
-    # Use LangGraph for complex conversations
-    complex_indicators = [
-        # Multi-step reasoning
-        "как",
-        "почему",
-        "что делать",
-        "посоветуй",
-        "рекомендуй",
-        # Personal advice
-        "мой",
-        "мне",
-        "я ем",
-        "моя диета",
-        "мой рацион",
-        # Analysis requests
-        "проанализируй",
-        "оцени",
-        "что думаешь",
-        "как улучшить",
-        # Planning
-        "план",
-        "составь",
-        "разработай",
-        "спланируй",
-        # Context-dependent questions
-        "сегодня",
-        "сейчас",
-        "в данный момент",
-        "учитывая",
-    ]
-
-    # Use simple streaming for basic questions
-    simple_indicators = [
-        "привет",
-        "здравствуй",
-        "спасибо",
-        "пока",
-        "что это",
-        "что значит",
-        "определение",
-    ]
-
-    # Check for simple questions first
-    if any(indicator in question_lower for indicator in simple_indicators):
-        return False
-
-    # Check for complex questions
-    if any(indicator in question_lower for indicator in complex_indicators):
-        return True
-
-    # Use LangGraph if we have nutrition data (context-aware conversations)
-    if nutrition_data and nutrition_data.get("entries_count", 0) > 0:
-        return True
-
-    # Use LangGraph for longer questions (likely more complex)
-    # Default to simple streaming for short, basic questions
-    return len(question.split()) > 10
+# Удалить функцию should_use_langgraph и все complex_indicators/simple_indicators
 
 
 @router.callback_query(F.data == "nutrition_chat")
@@ -201,25 +140,8 @@ async def handle_nutrition_question(message: Message, state: FSMContext, user_id
         return
 
     try:
-        # Check if question is food-related and user wants personal advice
-        nutrition_data = None
-
-        if is_food_related_message(question) and any(
-            word in question.lower()
-            for word in ["мой", "мне", "я", "сегодня", "рацион", "дневник"]
-        ):
-            # Get user's nutrition data for context
-            async with get_db_session() as session:
-                today = date.today()
-                nutrition_data = await get_user_daily_nutrition_summary(
-                    session, user_id, today
-                )
-
-                if nutrition_data["entries_count"] == 0:
-                    nutrition_data = None
-
-        # Stream AI response
-        await stream_ai_response(message, question, nutrition_data, user_id)
+        # Stream AI response (nutrition_data всегда None, ИИ сам решает по контексту)
+        await stream_ai_response(message, question, None, user_id)
 
     except Exception as e:
         logger.error(f"Error handling nutrition question: {e}")
@@ -242,23 +164,14 @@ async def stream_ai_response(
         response_text = ""
         last_update_length = 0
 
-        # Determine which service to use based on question complexity
-        use_langgraph = should_use_langgraph(question, nutrition_data)
+        # Всегда используем LangGraph для генерации ответа
+        stream_generator = langgraph_service.chat_with_nutrition_agent(
+            user_message=question,
+            user_id=user_id,
+            thread_id=f"chat_session_{user_id}",
+        )
 
-        if use_langgraph and user_id:
-            # Use LangGraph for complex conversations
-            stream_generator = langgraph_service.chat_with_nutrition_agent(
-                user_message=question,
-                user_id=user_id,
-                thread_id=f"chat_session_{user_id}",
-            )
-        else:
-            # Use simple streaming for basic questions
-            stream_generator = langgraph_service.simple_chat_stream(
-                user_message=question, nutrition_data=nutrition_data
-            )
-
-        # Stream response from LangGraph or simple chat
+        # Stream response from LangGraph
         async for chunk in stream_generator:
             response_text += chunk
 

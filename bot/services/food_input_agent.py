@@ -49,28 +49,14 @@ class FoodInputAgent:
             """Analyze user input to determine if it's food-related and extract info"""
             user_input = state.get("user_input", "")
 
-            # First, quick regex check for obvious food patterns
-            is_food_likely = self._quick_food_detection(user_input)
+            system_prompt = self._get_input_analysis_prompt()
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"Пользователь написал: '{user_input}'"),
+            ]
 
-            if not is_food_likely:
-                # Ask LLM for deeper analysis
-                system_prompt = self._get_input_analysis_prompt()
-                messages = [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=f"Пользователь написал: '{user_input}'"),
-                ]
-
-                response = await self.llm.ainvoke(messages)
-                analysis = self._parse_input_analysis(response.content)
-            else:
-                # Skip LLM call for obvious food input
-                analysis = {
-                    "is_food_related": True,
-                    "analysis_type": self._determine_portion_type(user_input),
-                    "food_description": user_input,
-                    "portion_info": self._extract_portion_info(user_input),
-                    "confidence": 0.9,
-                }
+            response = await self.llm.ainvoke(messages)
+            analysis = self._parse_input_analysis(response.content)
 
             return {
                 **state,
@@ -88,171 +74,6 @@ class FoodInputAgent:
         workflow.add_edge("analyzer", END)
 
         return workflow.compile()
-
-    def _quick_food_detection(self, text: str) -> bool:
-        """Quick regex-based food detection"""
-        text_lower = text.lower().strip()
-
-        # First check for obvious NON-food patterns (reject immediately)
-        non_food_patterns = [
-            r"^(привет|здравствуй|добрый день|доброе утро|добрый вечер|hi|hello).*",
-            r"^(как дела|что делаешь|как поживаешь|как жизнь|что нового).*",
-            r"^(спасибо|благодарю|thanks|пасиб).*",
-            r"^(пока|до свидания|увидимся|bye).*",
-            r"^(да|нет|не знаю|может быть|возможно)$",
-            r"^(хорошо|плохо|нормально|отлично|классно|ужасно)$",
-            r"^(помоги|помощь|что делать|не понимаю).*",
-            r'^[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]*$',  # только символы
-        ]
-
-        for pattern in non_food_patterns:
-            if re.search(pattern, text_lower):
-                return False
-
-        # Common food-related keywords
-        food_keywords = [
-            # Meals
-            "завтрак",
-            "обед",
-            "ужин",
-            "перекус",
-            "съел",
-            "ел",
-            "поел",
-            # Food types
-            "суп",
-            "борщ",
-            "каша",
-            "салат",
-            "мясо",
-            "курица",
-            "рыба",
-            "хлеб",
-            "молоко",
-            "творог",
-            "сыр",
-            "яйцо",
-            "картофель",
-            "рис",
-            "гречка",
-            "макароны",
-            "паста",
-            "пицца",
-            "бургер",
-            "шаурма",
-            "роллы",
-            # Fruits/vegetables
-            "банан",
-            "яблок",
-            "апельсин",
-            "груш",
-            "помидор",
-            "огурец",
-            "морковь",
-            # Drinks
-            "чай",
-            "кофе",
-            "сок",
-            "молоко",
-            "кефир",
-            "компот",
-            # Quantities
-            "грамм",
-            "килограмм",
-            "литр",
-            "миллилитр",
-            "штук",
-            "кусочек",
-            "тарелка",
-            "стакан",
-            "чашка",
-            "ложка",
-            "порция",
-        ]
-
-        # Check for food keywords
-        for keyword in food_keywords:
-            if keyword in text_lower:
-                return True
-
-        # Check for numbers + unit patterns (likely food with measurements)
-        number_patterns = [
-            r"\d+\s*г\b",  # граммы
-            r"\d+\s*кг\b",  # килограммы
-            r"\d+\s*мл\b",  # миллилитры
-            r"\d+\s*л\b",  # литры
-            r"\d+\s*шт\b",  # штуки
-            r"\d+\s*(банан|яблок|огурц|помидор)",  # количество фруктов/овощей
-        ]
-
-        return any(re.search(pattern, text_lower) for pattern in number_patterns)
-
-    def _determine_portion_type(self, text: str) -> str:
-        """Determine if portion is exact, approximate, or needs clarification"""
-        text_lower = text.lower()
-
-        # Exact portion indicators
-        exact_patterns = [
-            r"\d+\s*г\b",  # точный вес в граммах
-            r"\d+\s*кг\b",  # точный вес в килограммах
-            r"\d+\s*мл\b",  # точный объем в мл
-            r"\d+\s*л\b",  # точный объем в литрах
-            r"\d+\s*(банан|яблок|огурц|помидор|кусочек|штук)",  # точное количество
-            r"(стакан|чашка|тарелка|кружка|бутылка)\s+(молока|воды|сока|чая|кофе|супа|борща)",  # конкретная емкость с жидкостью
-        ]
-
-        # Check for exact patterns
-        for pattern in exact_patterns:
-            if re.search(pattern, text_lower):
-                return "exact"
-
-        # Size indicators that are approximate
-        size_indicators = ["маленьк", "средн", "больш", "огромн", "крошечн"]
-        for indicator in size_indicators:
-            if indicator in text_lower:
-                return "approximate"
-
-        # Very vague descriptions need clarification
-        vague_patterns = [
-            r"^(еда|блюдо|что-то|немного|чуть-чуть)$",
-            r"^[а-яё]{1,3}$",  # very short words
-        ]
-
-        for pattern in vague_patterns:
-            if re.search(pattern, text_lower.strip()):
-                return "need_clarification"
-
-        # Default to approximate if it seems like food but no clear portion
-        return "approximate"
-
-    def _extract_portion_info(self, text: str) -> str | None:
-        """Extract portion information from text"""
-        text_lower = text.lower()
-
-        # Extract numbers with units
-        patterns = {
-            "weight": r"(\d+(?:\.\d+)?)\s*(г|грам|гр|кг|килограмм)",
-            "volume": r"(\d+(?:\.\d+)?)\s*(мл|миллилитр|л|литр)",
-            "pieces": r"(\d+(?:\.\d+)?)\s*(шт|штук|штуки|банан|яблок|огурц|помидор|кусочек|кусочка)",
-            "containers": r"(стакан|чашка|тарелка|кружка|бутылка|миска)",
-            "sizes": r"(маленьк|средн|больш|огромн|крошечн)\w*",
-        }
-
-        extracted_info = []
-
-        for category, pattern in patterns.items():
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                if category in ["weight", "volume", "pieces"]:
-                    for match in matches:
-                        if isinstance(match, tuple):
-                            extracted_info.append(f"{match[0]}{match[1]}")
-                        else:
-                            extracted_info.append(match)
-                else:
-                    extracted_info.extend(matches)
-
-        return ", ".join(extracted_info) if extracted_info else None
 
     def _get_input_analysis_prompt(self) -> str:
         """Get prompt for input analysis"""
